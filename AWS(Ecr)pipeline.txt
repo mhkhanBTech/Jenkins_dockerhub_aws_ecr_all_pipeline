@@ -1,0 +1,210 @@
+pipeline {
+    agent any
+    environment {
+        AWS_ACCOUNT_ID="222222222222"
+        AWS_DEFAULT_REGION="us-east-1"
+        IMAGE_REPO_NAME="jenkins-pipeline"
+        IMAGE_TAG="${IMAGE_REPO_NAME}"
+        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
+    }
+   
+    stages {
+        
+         stage('Logging into AWS ECR') {
+            steps {
+                script {
+                sh """aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"""
+                }
+                 
+            }
+        }
+        
+        stage('Cloning Git') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/sd031/aws_codebuild_codedeploy_nodeJs_demo.git']]])     
+            }
+        }
+  
+    // Building Docker images
+    stage('Building image') {
+      steps{
+        script {
+          dockerImage = docker.build "${IMAGE_REPO_NAME}:${IMAGE_TAG}"
+        }
+      }
+    }
+   
+    // Uploading Docker images into AWS ECR
+    stage('Pushing to ECR') {
+     steps{  
+         script {
+                sh """docker tag ${IMAGE_REPO_NAME}:${IMAGE_TAG} ${REPOSITORY_URI}:$IMAGE_TAG"""
+                sh """docker push ${REPOSITORY_URI}:${IMAGE_TAG}"""
+         }
+        }
+      }
+    }
+}
+===============================================================================
+pipeline {
+    agent any
+    environment {
+        AWS_ACCOUNT_ID="222222222222"
+        AWS_DEFAULT_REGION="us-east-1"
+        IMAGE_REPO_NAME="jenkins-pipeline"
+        IMAGE_TAG="v1"
+        REPOSITORY_URI = "22222222222.dkr.ecr.us-east-1.amazonaws.com/jenkins-pipeline"
+    }
+   
+    stages {
+        
+         stage('Logging into AWS ECR') {
+            steps {
+                script {
+                sh """aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"""
+                }
+                 
+            }
+        }
+        
+        stage('Cloning Git') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/sd031/aws_codebuild_codedeploy_nodeJs_demo.git']]])     
+            }
+        }
+  
+    // Building Docker images
+    stage('Building image') {
+      steps{
+        script {
+          dockerImage = docker.build "${IMAGE_REPO_NAME}:${IMAGE_TAG}"
+        }
+      }
+    }
+   
+    // Uploading Docker images into AWS ECR
+    stage('Pushing to ECR') {
+     steps{  
+         script {
+                sh """docker tag ${IMAGE_REPO_NAME}:${IMAGE_TAG} ${REPOSITORY_URI}:$IMAGE_TAG"""
+                sh """docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"""
+         }
+        }
+      }
+    }
+}
+
+Aws Ecr push pipeline: 
+pipeline {
+    agent any
+    environment {
+        // Define your SSH credential ID (created in step )
+        SSH_CREDENTIALS = 'absnjdjccd'
+       // Replace 'your_remote_server_ip' with the IP address of the remote server
+        REMOTE_SERVER_IP = '172.100.111.02'
+        AWS_ACCOUNT_ID="120717539064"
+        AWS_DEFAULT_REGION="us-west-2"
+        IMAGE_REPO_NAME="sample"
+        IMAGE_TAG="$BUILD_NUMBER"
+        REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
+    
+    }
+
+    stages {
+        stage('Hello') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/sd031/aws_codebuild_codedeploy_nodeJs_demo.git']]])     
+
+            }
+        }
+        stage('Build docker image') {
+            steps {  
+                sh "cp /opt/dev/ sample/* ."
+                sh "docker build -t ${REPOSITORY_URI}:${IMAGE_TAG} ."
+            }
+        }
+         stage('Logging into AWS ECR') {
+            steps {
+                script {
+                sh "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+                }
+                 
+            }
+        }
+        stage('Push image') {
+            steps {
+                sh "docker tag ${IMAGE_REPO_NAME}:${IMAGE_TAG} ${REPOSITORY_URI}:$IMAGE_TAG"
+                sh "docker push ${REPOSITORY_URI}:${IMAGE_TAG}"
+                sh "docker images --format '{{.Repository}}:{{.Tag}}' | grep '${IMAGE_REPO_NAME}' | xargs -I {} docker rmi {}"
+            }
+        }
+                stage('Run Docker ps -a') {
+            steps {
+                // Start the SSH agent with the appropriate credentials
+                sshagent(credentials: [SSH_CREDENTIALS]) {
+                    // Execute the remote command to run docker ps -a
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${REMOTE_SERVER_IP}aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+                    
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${REMOTE_SERVER_IP} docker rm -f ${IMAGE_REPO_NAME} "
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${REMOTE_SERVER_IP} docker pull ${REPOSITORY_URI}:{IMAGE_TAG}"
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${REMOTE_SERVER_IP} docker run -d -p 5001:5000 --name ${IMAGE_REPO_NAME} --restart always ${REPOSITORY_URI}:${IMAGE_TAG}"
+                   
+                }
+            }
+        }
+    }
+}
+
+
+
+
+
+pipeline {
+    agent any 
+    environment {
+        ECR_IMAGE_TAG = "439282343946.dkr.ecr.ap-southeast-1.amazonaws.com/foodi-api-gateway-service:$BUILD_NUMBER"
+        // Define your SSH credential ID (created in step 2)
+        SSH_CREDENTIALS = 'hhhhhhhhhhhhh'
+        // Replace 'your_remote_server_ip' with the IP address of the remote server
+        REMOTE_SERVER_IP = '192.168.140.153'
+    }
+    stages { 
+        stage('Git pull') {
+            steps {
+                checkout scmGit(branches: [[name: '*/development']], extensions: [], userRemoteConfigs: [[credentialsId: 'gitewithshayok', url: 'http://123.200.23.98:55445/TechnoNext/foodi-api-gateway-service']])
+            }
+        }
+        stage('Build docker image') {
+            steps {  
+                sh "cp /opt/dev/folder_name/* ."
+                sh "docker build -t ${ECR_IMAGE_TAG} ."
+            }
+        }
+        stage('Login to Docker Hub') {
+            steps {
+                sh "aws ecr get-login-password --region ap-southeast-1 |  docker login --username AWS --password-stdin 439282343946.dkr.ecr.ap-southeast-1.amazonaws.com"
+            }
+        }
+        stage('Push image') {
+            steps {
+                sh "docker push ${ECR_IMAGE_TAG}"
+                sh "docker images --format '{{.Repository}}:{{.Tag}}' | grep 'folde_name' | xargs -I {} docker rmi {}"
+            }
+        }
+        stage('Run Docker ps -a') {
+            steps {
+                // Start the SSH agent with the appropriate credentials
+                sshagent(credentials: [SSH_CREDENTIALS]) {
+                    // Execute the remote command to run docker ps -a
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${REMOTE_SERVER_IP} aws ecr get-login-password --region ap-southeast-1 |  docker login --username AWS --password-stdin 439282343946.dkr.ecr.ap-southeast-1.amazonaws.com"
+                    
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${REMOTE_SERVER_IP} docker rm -f folder_name "
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${REMOTE_SERVER_IP} docker pull ${ECR_IMAGE_TAG}"
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${REMOTE_SERVER_IP} docker run -d -p 5001:5000 --name folder_name --restart always ${ECR_IMAGE_TAG}"
+                   
+                }
+            }
+    }
+}
+}
+=====================================================================================
